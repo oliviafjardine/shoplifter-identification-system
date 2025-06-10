@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Monitoring Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>SecureWatch</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active">
+                    <i class="fas fa-th-large"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fas fa-video"></i>
+                    <span>Cameras</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Alerts</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fas fa-users"></i>
+                    <span>People</span>
+                </a>
+                <a href="#" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Security Admin</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Header -->
+            <div class="dashboard-header">
+                <div class="dashboard-title">
+                    <h1>Dashboard</h1>
+                    <span>Welcome back, monitoring system active</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-icon" id="notifications-btn">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notification-count">0</span>
+                    </button>
+                    <button class="btn-icon">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Status Cards Row -->
+            <div class="dashboard-row">
+                <div class="status-cards">
+                    <div class="status-card time-card">
+                        <div class="card-content">
+                            <div class="time-display">
+                                <div class="current-time" id="current-time">19:30</div>
+                                <div class="current-date" id="current-date">2024-01-09</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="status-card uptime-card">
+                        <div class="card-header">
+                            <span class="card-label">System Status</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="uptime-display">
+                                <span class="uptime-value" id="system-uptime">10d 3m</span>
+                                <span class="uptime-label">System Process</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="status-card status-indicator-card">
+                        <div class="card-header">
+                            <span class="card-label">Status</span>
+                        </div>
+                        <div class="card-content">
+                            <div class="status-indicator">
+                                <div class="status-icon online" id="system-status-icon">
+                                    <i class="fas fa-shield-alt"></i>
+                                </div>
+                                <div class="status-info">
+                                    <span class="status-text" id="system-status-text">Active</span>
+                                    <span class="status-detail" id="system-status-detail">All systems operational</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                </div>
+            </div>
+
+            <!-- Camera Grid -->
+            <div class="dashboard-row">
+                <div class="camera-grid">
+                    <div class="camera-feed">
+                        <div class="camera-header">
+                            <span class="camera-title">Store Camera 1</span>
+                            <div class="camera-status">
+                                <span class="status-dot online"></span>
+                                <span class="status-text">Online</span>
+                            </div>
+                        </div>
+                        <div class="camera-content">
+                            <img id="video-feed-1" src="/video_feed" alt="Camera 1 Feed" />
+                            <div class="camera-overlay">
+                                <div class="detection-info">
+                                    <span class="detection-count" id="people-count-1">0</span>
+                                    <span class="detection-label">People</span>
+                                </div>
+                            </div>
+                            <div class="camera-controls">
+                                <button class="control-btn"><i class="fas fa-play"></i></button>
+                                <button class="control-btn"><i class="fas fa-expand"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="camera-feed">
+                        <div class="camera-header">
+                            <span class="camera-title">Store Camera 2</span>
+                            <div class="camera-status">
+                                <span class="status-dot offline"></span>
+                                <span class="status-text">No Camera</span>
+                            </div>
+                        </div>
+                        <div class="camera-content no-camera">
+                            <div class="no-camera-message">
+                                <i class="fas fa-video-slash"></i>
+                                <span>No Camera Connected</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="camera-feed">
+                        <div class="camera-header">
+                            <span class="camera-title">Store Camera 3</span>
+                            <div class="camera-status">
+                                <span class="status-dot offline"></span>
+                                <span class="status-text">No Camera</span>
+                            </div>
+                        </div>
+                        <div class="camera-content no-camera">
+                            <div class="no-camera-message">
+                                <i class="fas fa-video-slash"></i>
+                                <span>No Camera Connected</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Monitoring Row -->
+            <div class="dashboard-row">
+                <div class="monitoring-widgets">
+                    <div class="widget system-load">
+                        <div class="widget-header">
+                            <span class="widget-title">System Load</span>
+                        </div>
+                        <div class="widget-content">
+                            <div class="progress-circle">
+                                <div class="progress-value" id="system-load">29%</div>
+                            </div>
+                            <div class="load-details">
+                                <div class="load-item">
+                                    <span class="load-label">CPU</span>
+                                    <span class="load-value" id="cpu-usage">15%</span>
+                                </div>
+                                <div class="load-item">
+                                    <span class="load-label">Memory</span>
+                                    <span class="load-value" id="memory-usage">42%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+
+                    <div class="widget storage">
+                        <div class="widget-header">
+                            <span class="widget-title">Storage</span>
+                        </div>
+                        <div class="widget-content">
+                            <div class="storage-info">
+                                <span class="storage-used" id="storage-used">2.66 GB</span>
+                                <span class="storage-total">/ 7.64 GB</span>
+                            </div>
+                            <div class="storage-bar">
+                                <div class="storage-progress" style="width: 35%"></div>
+                            </div>
+                            <div class="storage-details">
+                                <span class="storage-label">Video Storage</span>
+                                <span class="storage-percent" id="storage-percent">35%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts Section -->
+            <div class="dashboard-row">
+                <div class="alerts-panel">
+                    <div class="panel-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Recent Alerts</h3>
+                        <div class="panel-actions">
+                            <button class="btn-secondary" id="clear-alerts">Clear All</button>
+                            <button class="btn-primary" id="refresh-alerts">Refresh</button>
+                        </div>
+                    </div>
+                    <div class="alerts-content">
+                        <div id="alerts-list" class="alerts-list">
+                            <div class="no-alerts">
+                                <i class="fas fa-check-circle"></i>
+                                <p>No alerts at this time</p>
+                                <span>System monitoring active</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alert-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-exclamation-triangle"></i> Security Alert</h3>
+                <button class="close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="alert-details"></div>
+                <div class="modal-actions">
+                    <button id="acknowledge-alert" class="btn-primary">
+                        <i class="fas fa-check"></i> Acknowledge
+                    </button>
+                    <button id="dismiss-alert" class="btn-secondary">
+                        <i class="fas fa-times"></i> Dismiss
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
