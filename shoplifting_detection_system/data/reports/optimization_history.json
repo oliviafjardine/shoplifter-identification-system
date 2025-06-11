@@ -1,0 +1,40 @@
+[
+  {
+    "timestamp": "2025-06-10T16:13:43.076314",
+    "previous_config": {
+      "shelf_interaction_threshold": 0.4,
+      "concealment_threshold": 0.5,
+      "shoplifting_threshold": 0.7,
+      "alert_threshold": 0.7,
+      "confidence_boost_factor": 0.3,
+      "proximity_weight": 0.3,
+      "time_weight": 0.3,
+      "bbox_change_threshold": 0.2
+    },
+    "new_config": {
+      "shelf_interaction_threshold": 0.30000000000000004,
+      "concealment_threshold": 0.4,
+      "shoplifting_threshold": 0.6,
+      "alert_threshold": 0.7,
+      "confidence_boost_factor": 0.4,
+      "proximity_weight": 0.5,
+      "time_weight": 0.4,
+      "bbox_change_threshold": 0.15000000000000002
+    },
+    "performance_metrics": {
+      "accuracy": 0.5,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 1.0,
+      "avg_confidence": 0.0,
+      "detection_latency": 0.0
+    },
+    "suggestions": [
+      "Decreased detection thresholds to catch more incidents",
+      "Increased confidence requirements to improve precision",
+      "Enhanced sensitivity to improve recall"
+    ]
+  }
+]
