@@ -109,38 +109,138 @@ class LiveShopliftingDetector:
             return False
 
     def detect_people_and_analyze(self, frame):
-        """Enhanced people detection with improved accuracy and filtering"""
+        """Enhanced people detection with improved accuracy and multiple detection methods"""
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         people_count = 0
         detections = []
+        debug_info = []
 
-        # Improved face detection with better parameters and validation
+        # Method 1: Face detection with relaxed parameters
         try:
             face_cascade = cv2.CascadeClassifier(
                 cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-            # More strict parameters to reduce false positives
+            # Relaxed parameters for better detection
             faces = face_cascade.detectMultiScale(
                 gray,
-                scaleFactor=1.2,      # More conservative scaling
-                minNeighbors=8,       # Higher threshold for detection confidence
-                minSize=(50, 50),     # Larger minimum face size
-                maxSize=(250, 250),   # Reasonable maximum face size
-                flags=cv2.CASCADE_SCALE_IMAGE | cv2.CASCADE_DO_CANNY_PRUNING
+                scaleFactor=1.1,      # More sensitive scaling
+                minNeighbors=4,       # Lower threshold for better detection
+                minSize=(30, 30),     # Smaller minimum face size
+                maxSize=(300, 300),   # Larger maximum face size
+                flags=cv2.CASCADE_SCALE_IMAGE
             )
 
-            for (x, y, w, h) in faces:
-                # Additional validation to reduce false positives
-                if self.validate_face_detection(gray, x, y, w, h) and self.check_detection_consistency(x, y, w, h):
-                    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-                    cv2.putText(frame, 'Person', (x, y-10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                    detections.append({'type': 'face', 'bbox': (x, y, w, h)})
-                    people_count += 1
+            # Filter overlapping face detections (same face detected multiple times)
+            filtered_faces = self._filter_overlapping_detections(
+                faces, overlap_threshold=0.3)
+
+            debug_info.append(f"Raw face detections: {len(filtered_faces)}")
+
+            for (x, y, w, h) in filtered_faces:
+                # Relaxed validation for better detection
+                if self.validate_face_detection(gray, x, y, w, h, relaxed=True):
+                    if self.check_detection_consistency(x, y, w, h, relaxed=True):
+                        cv2.rectangle(frame, (x, y), (x+w, y+h),
+                                      (0, 255, 0), 2)
+                        cv2.putText(frame, 'Face', (x, y-10),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                        detections.append(
+                            {'type': 'face', 'bbox': (x, y, w, h)})
+                        people_count += 1
+                    else:
+                        debug_info.append(
+                            f"Face rejected by consistency check: ({x},{y},{w},{h})")
+                else:
+                    debug_info.append(
+                        f"Face rejected by validation: ({x},{y},{w},{h})")
         except Exception as e:
             print(f"⚠️ Face detection error: {e}")
-            pass
+            debug_info.append(f"Face detection error: {e}")
+
+        # Method 2: Full body detection using HOG descriptor
+        try:
+            hog = cv2.HOGDescriptor()
+            hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+
+            # Detect people using HOG
+            (rects, weights) = hog.detectMultiScale(gray,
+                                                    winStride=(4, 4),
+                                                    padding=(8, 8),
+                                                    scale=1.05,
+                                                    useMeanshiftGrouping=False)
+
+            debug_info.append(f"HOG body detections: {len(rects)}")
+
+            for i, (x, y, w, h) in enumerate(rects):
+                # Filter by confidence (weight) - further lowered threshold for better detection
+                if weights[i] > 0.15:  # Further lowered confidence threshold
+                    # Check if this overlaps with other body detections (filter duplicates)
+                    overlaps_with_other_body = False
+                    for j, (ox, oy, ow, oh) in enumerate(rects):
+                        if j != i and weights[j] > 0.15:
+                            overlap = self._boxes_overlap(
+                                (x, y, w, h), (ox, oy, ow, oh))
+                            if overlap > 0.4:  # 40% overlap threshold for body detections
+                                # Keep the one with higher confidence
+                                if weights[j] > weights[i]:
+                                    overlaps_with_other_body = True
+                                    break
+
+                    if not overlaps_with_other_body:
+                        # Check if this detection overlaps with existing face detections
+                        overlaps_with_face = False
+                        for det in detections:
+                            if det['type'] == 'face':
+                                fx, fy, fw, fh = det['bbox']
+                                if self._boxes_overlap((x, y, w, h), (fx, fy, fw, fh)):
+                                    overlaps_with_face = True
+                                    break
+
+                        if not overlaps_with_face:
+                            cv2.rectangle(frame, (x, y), (x+w, y+h),
+                                          (255, 0, 0), 2)
+                            cv2.putText(frame, 'Body', (x, y-10),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                            detections.append(
+                                {'type': 'body', 'bbox': (x, y, w, h)})
+                            people_count += 1
+                else:
+                    debug_info.append(
+                        f"HOG detection rejected (low confidence {weights[i]:.2f}): ({x},{y},{w},{h})")
+
+        except Exception as e:
+            print(f"⚠️ HOG detection error: {e}")
+            debug_info.append(f"HOG detection error: {e}")
+
+        # Method 3: Motion-based detection (TEMPORARILY DISABLED - causing duplicate detections)
+        # TODO: Re-enable with better single-person motion detection
+        debug_info.append("Motion detection: DISABLED")
+
+        # Method 4: Edge-based detection (TEMPORARILY DISABLED - causing duplicate detections)
+        # TODO: Re-enable with better deduplication
+        debug_info.append("Edge detection: DISABLED")
+
+        # Print debug info if no people detected or if requested
+        if people_count == 0 or len(debug_info) > 3:
+            print(f"🔍 Detection Debug: {'; '.join(debug_info)}")
+            print(f"🔍 Final people count: {people_count}")
+
+        # Deduplicate detections - merge overlapping detections from different methods
+        unique_detections = self._deduplicate_detections(detections)
+        final_people_count = len(unique_detections)
+
+        # Always print when people are detected
+        if final_people_count > 0:
+            detection_types = [det['type'] for det in unique_detections]
+            print(
+                f"✅ People detected: {final_people_count} ({', '.join(detection_types)})")
+            if final_people_count != people_count:
+                print(f"🔧 Deduplicated: {people_count} → {final_people_count}")
+
+        # Update the final count
+        people_count = final_people_count
+        detections = unique_detections
 
         # AI-powered behavior analysis using trained model
         suspicious_score = 0.0
@@ -172,7 +272,201 @@ class LiveShopliftingDetector:
 
         return frame, people_count, suspicious_score
 
-    def validate_face_detection(self, gray, x, y, w, h):
+    def _deduplicate_detections(self, detections):
+        """Remove duplicate detections of the same person from different methods"""
+        if len(detections) <= 1:
+            return detections
+
+        unique_detections = []
+        used_indices = set()
+
+        for i, detection in enumerate(detections):
+            if i in used_indices:
+                continue
+
+            # This detection represents a unique person
+            best_detection = detection
+            used_indices.add(i)
+
+            # Check for overlapping detections from other methods
+            for j, other_detection in enumerate(detections):
+                if j <= i or j in used_indices:
+                    continue
+
+                # Calculate overlap between detections
+                bbox1 = detection['bbox']
+                bbox2 = other_detection['bbox']
+                overlap = self._boxes_overlap(bbox1, bbox2)
+
+                # Check for overlap or containment (face inside body detection)
+                is_same_person = False
+
+                if overlap > 0.2:  # Lower overlap threshold (20%)
+                    is_same_person = True
+                else:
+                    # Check if one detection is contained within another (e.g., face inside body)
+                    containment = self._check_containment(bbox1, bbox2)
+                    if containment > 0.5:  # Lower containment threshold (50%)
+                        is_same_person = True
+                    else:
+                        # Check proximity - if detections are very close, likely same person
+                        center1_x, center1_y = bbox1[0] + \
+                            bbox1[2]//2, bbox1[1] + bbox1[3]//2
+                        center2_x, center2_y = bbox2[0] + \
+                            bbox2[2]//2, bbox2[1] + bbox2[3]//2
+                        distance = ((center1_x - center2_x)**2 +
+                                    (center1_y - center2_y)**2)**0.5
+
+                        # If centers are within 80 pixels, likely same person
+                        if distance < 80:
+                            is_same_person = True
+
+                if is_same_person:
+                    used_indices.add(j)
+
+                    # Choose the best detection (prefer face > body > motion > edge)
+                    priority = {'face': 4, 'body': 3, 'motion': 2, 'edge': 1}
+                    if priority.get(other_detection['type'], 0) > priority.get(best_detection['type'], 0):
+                        best_detection = other_detection
+
+            unique_detections.append(best_detection)
+
+        return unique_detections
+
+    def _filter_overlapping_detections(self, detections, overlap_threshold=0.3):
+        """Filter out overlapping detections (same object detected multiple times)"""
+        if len(detections) <= 1:
+            return detections
+
+        # Convert to list if it's a numpy array
+        detections_list = list(detections)
+
+        filtered_detections = []
+        used_indices = set()
+
+        for i, detection in enumerate(detections_list):
+            if i in used_indices:
+                continue
+
+            # This detection is unique so far
+            x1, y1, w1, h1 = detection
+            used_indices.add(i)
+
+            # Check for overlapping detections
+            for j, other_detection in enumerate(detections_list):
+                if j <= i or j in used_indices:
+                    continue
+
+                x2, y2, w2, h2 = other_detection
+                overlap = self._boxes_overlap(
+                    (x1, y1, w1, h1), (x2, y2, w2, h2))
+
+                # If significant overlap, these are likely the same object
+                if overlap > overlap_threshold:
+                    used_indices.add(j)
+
+                    # Keep the larger detection (usually more accurate)
+                    if w2 * h2 > w1 * h1:
+                        detection = other_detection
+
+            filtered_detections.append(detection)
+
+        return filtered_detections
+
+    def _merge_nearby_contours(self, contours):
+        """Merge contours that are close to each other (likely same person)"""
+        if len(contours) <= 1:
+            return contours
+
+        # Convert contours to bounding boxes for easier processing
+        boxes = []
+        for contour in contours:
+            x, y, w, h = cv2.boundingRect(contour)
+            boxes.append((x, y, w, h, contour))
+
+        merged_contours = []
+        used_indices = set()
+
+        for i, (x1, y1, w1, h1, contour1) in enumerate(boxes):
+            if i in used_indices:
+                continue
+
+            # Start with this contour
+            merged_points = contour1.copy()
+            used_indices.add(i)
+
+            # Look for nearby contours to merge
+            for j, (x2, y2, w2, h2, contour2) in enumerate(boxes):
+                if j <= i or j in used_indices:
+                    continue
+
+                # Calculate distance between contour centers
+                center1_x, center1_y = x1 + w1//2, y1 + h1//2
+                center2_x, center2_y = x2 + w2//2, y2 + h2//2
+                distance = ((center1_x - center2_x)**2 +
+                            (center1_y - center2_y)**2)**0.5
+
+                # Merge if contours are close (within 100 pixels)
+                if distance < 100:
+                    # Combine the contour points
+                    merged_points = np.vstack([merged_points, contour2])
+                    used_indices.add(j)
+
+            merged_contours.append(merged_points)
+
+        return merged_contours
+
+    def _boxes_overlap(self, box1, box2):
+        """Check if two bounding boxes overlap"""
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+
+        # Calculate overlap area
+        overlap_x = max(0, min(x1 + w1, x2 + w2) - max(x1, x2))
+        overlap_y = max(0, min(y1 + h1, y2 + h2) - max(y1, y2))
+        overlap_area = overlap_x * overlap_y
+
+        # Calculate union area
+        area1 = w1 * h1
+        area2 = w2 * h2
+        union_area = area1 + area2 - overlap_area
+
+        # Return overlap ratio (IoU - Intersection over Union)
+        if union_area == 0:
+            return 0
+        return overlap_area / union_area
+
+    def _check_containment(self, box1, box2):
+        """Check if one box is contained within another (e.g., face inside body)"""
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+
+        # Check if box1 is contained in box2
+        if (x2 <= x1 and y2 <= y1 and
+                x1 + w1 <= x2 + w2 and y1 + h1 <= y2 + h2):
+            return 1.0  # box1 fully contained in box2
+
+        # Check if box2 is contained in box1
+        if (x1 <= x2 and y1 <= y2 and
+                x2 + w2 <= x1 + w1 and y2 + h2 <= y1 + h1):
+            return 1.0  # box2 fully contained in box1
+
+        # Calculate partial containment
+        # Area of smaller box that's inside the larger box
+        overlap_x = max(0, min(x1 + w1, x2 + w2) - max(x1, x2))
+        overlap_y = max(0, min(y1 + h1, y2 + h2) - max(y1, y2))
+        overlap_area = overlap_x * overlap_y
+
+        # Calculate containment as overlap / smaller_box_area
+        area1 = w1 * h1
+        area2 = w2 * h2
+        smaller_area = min(area1, area2)
+
+        if smaller_area == 0:
+            return 0
+        return overlap_area / smaller_area
+
+    def validate_face_detection(self, gray, x, y, w, h, relaxed=False):
         """Validate face detection to reduce false positives"""
         try:
             # Extract the detected region
@@ -180,22 +474,29 @@ class LiveShopliftingDetector:
 
             # Check aspect ratio (faces are typically not too wide or too tall)
             aspect_ratio = w / h
-            if aspect_ratio < 0.5 or aspect_ratio > 2.0:
-                return False
+            if relaxed:
+                if aspect_ratio < 0.3 or aspect_ratio > 3.0:  # More permissive
+                    return False
+            else:
+                if aspect_ratio < 0.5 or aspect_ratio > 2.0:
+                    return False
 
             # Check if the region has sufficient contrast (faces have varied intensities)
-            if face_region.std() < 15:  # Too uniform, likely not a face
+            contrast_threshold = 10 if relaxed else 15
+            if face_region.std() < contrast_threshold:
                 return False
 
-            # Check position - faces are typically in upper 2/3 of frame
+            # Check position - faces are typically in upper portion of frame
             frame_height = gray.shape[0]
-            if y > frame_height * 0.8:  # Too low in frame
+            position_threshold = 0.9 if relaxed else 0.8
+            if y > frame_height * position_threshold:
                 return False
 
             # Check size relative to frame
             frame_area = gray.shape[0] * gray.shape[1]
             face_area = w * h
-            if face_area > frame_area * 0.3:  # Too large relative to frame
+            size_threshold = 0.4 if relaxed else 0.3
+            if face_area > frame_area * size_threshold:
                 return False
 
             return True
@@ -203,7 +504,7 @@ class LiveShopliftingDetector:
         except Exception:
             return False
 
-    def check_detection_consistency(self, x, y, w, h):
+    def check_detection_consistency(self, x, y, w, h, relaxed=False):
         """Check if detection is consistent across recent frames to reduce false positives"""
         try:
             current_detection = (x, y, w, h)
@@ -215,13 +516,20 @@ class LiveShopliftingDetector:
             if len(self.detection_history) > 5:
                 self.detection_history = self.detection_history[-5:]
 
-            # If we don't have enough history, be more conservative
-            if len(self.detection_history) < 3:
-                return False
+            # If we don't have enough history, be more permissive in relaxed mode
+            if relaxed:
+                if len(self.detection_history) < 2:
+                    return True  # Allow immediate detection in relaxed mode
+            else:
+                if len(self.detection_history) < 3:
+                    return False
 
             # Check if there are similar detections in recent history
             similar_count = 0
-            for hist_x, hist_y, hist_w, hist_h in self.detection_history[-3:]:
+            history_to_check = self.detection_history[-2:
+                                                      ] if relaxed else self.detection_history[-3:]
+
+            for hist_x, hist_y, hist_w, hist_h in history_to_check:
                 # Calculate overlap/similarity
                 center_x, center_y = x + w//2, y + h//2
                 hist_center_x, hist_center_y = hist_x + hist_w//2, hist_y + hist_h//2
@@ -234,11 +542,14 @@ class LiveShopliftingDetector:
                 size_diff = abs(w*h - hist_w*hist_h) / (w*h)
 
                 # Consider similar if close in position and size
-                if distance < 50 and size_diff < 0.3:
+                distance_threshold = 70 if relaxed else 50
+                size_threshold = 0.4 if relaxed else 0.3
+                if distance < distance_threshold and size_diff < size_threshold:
                     similar_count += 1
 
-            # Require at least 2 similar detections in recent history
-            return similar_count >= 2
+            # Require fewer similar detections in relaxed mode
+            required_similar = 1 if relaxed else 2
+            return similar_count >= required_similar
 
         except Exception:
             return False
