@@ -1396,6 +1396,122 @@ async def get_stats():
         ]
     })
 
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for deployment monitoring"""
+    try:
+        # Check if the application is running properly
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": "3.0.0",
+            "checks": {
+                "application": "ok",
+                "model_loaded": system_state.get("trained_model") is not None,
+                "camera_status": system_state.get("camera_connected", False),
+                "detection_active": system_state.get("detection_active", False)
+            }
+        }
+
+        # Determine overall health
+        critical_checks = ["application"]
+        all_critical_ok = all(
+            health_status["checks"][check] == "ok" for check in critical_checks)
+
+        if not all_critical_ok:
+            health_status["status"] = "unhealthy"
+            return JSONResponse(content=health_status, status_code=503)
+
+        return JSONResponse(content=health_status, status_code=200)
+
+    except Exception as e:
+        return JSONResponse(content={
+            "status": "unhealthy",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }, status_code=503)
+
+
+@app.get("/ready")
+async def readiness_check():
+    """Readiness check endpoint for deployment monitoring"""
+    try:
+        # Check if the application is ready to serve requests
+        readiness_status = {
+            "status": "ready",
+            "timestamp": datetime.now().isoformat(),
+            "version": "3.0.0",
+            "checks": {
+                "application": "ok",
+                "model_loaded": system_state.get("trained_model") is not None,
+                "system_initialized": True
+            }
+        }
+
+        # Check if model is loaded (optional for readiness)
+        if not readiness_status["checks"]["model_loaded"]:
+            readiness_status["checks"]["model_status"] = "training_required"
+
+        return JSONResponse(content=readiness_status, status_code=200)
+
+    except Exception as e:
+        return JSONResponse(content={
+            "status": "not_ready",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e)
+        }, status_code=503)
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus-style metrics endpoint"""
+    try:
+        metrics = []
+
+        # Application metrics
+        metrics.append(f"shoplifting_detection_up 1")
+        metrics.append(
+            f"shoplifting_detection_version_info{{version=\"3.0.0\"}} 1")
+
+        # Model metrics
+        model_loaded = 1 if system_state.get(
+            "trained_model") is not None else 0
+        metrics.append(f"shoplifting_model_loaded {model_loaded}")
+
+        model_accuracy = system_state.get("model_accuracy", 0.0)
+        metrics.append(f"shoplifting_model_accuracy {model_accuracy}")
+
+        # Camera metrics
+        camera_connected = 1 if system_state.get(
+            "camera_connected", False) else 0
+        metrics.append(f"shoplifting_camera_connected {camera_connected}")
+
+        active_cameras = system_state["system_stats"]["active_cameras"]
+        metrics.append(f"shoplifting_active_cameras {active_cameras}")
+
+        # Detection metrics
+        total_detections = system_state["system_stats"]["total_detections"]
+        metrics.append(f"shoplifting_total_detections {total_detections}")
+
+        total_alerts = system_state["system_stats"]["total_alerts"]
+        metrics.append(f"shoplifting_total_alerts {total_alerts}")
+
+        # Current people count
+        current_people = sum(system_state["people_counts"])
+        metrics.append(f"shoplifting_current_people_count {current_people}")
+
+        # System metrics
+        detection_active = 1 if system_state.get(
+            "detection_active", False) else 0
+        metrics.append(f"shoplifting_detection_active {detection_active}")
+
+        return "\n".join(metrics) + "\n"
+
+    except Exception as e:
+        return f"# Error generating metrics: {str(e)}\n"
+
+
 if __name__ == "__main__":
     print("🛡️ Starting Professional Shoplifting Detection System...")
     print("=" * 60)
