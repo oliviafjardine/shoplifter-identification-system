@@ -8,21 +8,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 import uvicorn
-import os
 import time
 import threading
 from datetime import datetime
 from pathlib import Path
 
-# Conditional imports for deployment compatibility
-try:
-    import cv2
-    import numpy as np
-    import pickle
-    CV_AVAILABLE = True
-except ImportError:
-    CV_AVAILABLE = False
-    print("⚠️ OpenCV not available - running in demo mode")
+# Required imports for live camera detection
+import cv2
+import numpy as np
+import pickle
 
 # Create FastAPI app
 app = FastAPI(
@@ -61,23 +55,11 @@ class LiveShopliftingDetector:
         self.current_frame = None
         self.frame_lock = threading.Lock()
         self.detection_history = []  # Store recent detections for consistency check
-        self.demo_mode = not CV_AVAILABLE or os.getenv(
-            'DEMO_MODE', 'false').lower() == 'true'
         self.load_trained_model()
 
     def load_trained_model(self):
         """Load the trained shoplifting detection model"""
-        if self.demo_mode:
-            print("🎭 Running in demo mode - using simulated model")
-            system_state["trained_model"] = None
-            system_state["model_accuracy"] = 0.95  # Demo accuracy
-            return True
-
         try:
-            if not CV_AVAILABLE:
-                print("⚠️ OpenCV not available - cannot load model")
-                return False
-
             model_path = Path("ml/models/continuous_model.pkl")
             if model_path.exists():
                 with open(model_path, 'rb') as f:
@@ -99,20 +81,6 @@ class LiveShopliftingDetector:
 
     def initialize_camera(self):
         """Initialize camera capture"""
-        if self.demo_mode:
-            print("🎭 Demo mode - simulating camera connection")
-            system_state["camera_connected"] = True
-            system_state["camera_status"] = "Demo mode - simulated camera"
-            system_state["system_stats"]["active_cameras"] = 1
-            return True
-
-        if not CV_AVAILABLE:
-            print("❌ OpenCV not available - cannot initialize camera")
-            system_state["camera_connected"] = False
-            system_state["camera_status"] = "OpenCV not available"
-            system_state["system_stats"]["active_cameras"] = 0
-            return False
-
         try:
             self.cap = cv2.VideoCapture(self.camera_source)
             if not self.cap.isOpened():
@@ -695,42 +663,11 @@ async def startup_event():
     """Initialize the system on startup"""
     print("🚀 Starting Professional Shoplifting Detection System...")
 
-    # Initialize demo data if in demo mode
-    if detector.demo_mode:
-        print("🎭 Initializing demo mode...")
-        # Add some demo alerts for demonstration
-        import random
-        demo_alerts = [
-            {
-                "id": "alert_001",
-                "type": "Person Detected",
-                "description": "Individual detected in camera view",
-                "severity": "info",
-                "timestamp": "14:23:15",
-                "camera": "CAM-001",
-                "confidence": 0.95
-            },
-            {
-                "id": "alert_002",
-                "type": "Movement Alert",
-                "description": "Unusual movement pattern detected",
-                "severity": "warning",
-                "timestamp": "14:18:42",
-                "camera": "CAM-002",
-                "confidence": 0.78
-            }
-        ]
-        system_state["alerts"] = demo_alerts
-        # Set some demo people counts
-        system_state["people_counts"] = [2, 1, 0, 1]
-        system_state["system_stats"]["total_detections"] = 47
-        system_state["system_stats"]["total_alerts"] = 2
-        print("✅ Demo mode initialized with sample data")
-
     if detector.start_detection():
         print("✅ Live camera detection started")
     else:
-        print("⚠️ Camera not available - running in demo mode")
+        print("❌ Camera not available - system cannot start without camera")
+        exit(1)
 
 
 async def shutdown_event():
@@ -1390,75 +1327,29 @@ async def get_dashboard_data():
 
 
 def generate_frames():
-    """Generate video frames for streaming"""
-    if not CV_AVAILABLE or detector.demo_mode:
-        # Generate demo frames using PIL
-        try:
-            from PIL import Image, ImageDraw, ImageFont
-
-            while True:
-                # Create a demo frame
-                img = Image.new('RGB', (640, 480), color='black')
-                draw = ImageDraw.Draw(img)
-
-                # Add demo content
-                demo_text = "🎭 DEMO MODE"
-                status_text = "Shoplifting Detection System"
-                time_text = datetime.now().strftime("%H:%M:%S")
-
-                # Draw text on image
-                try:
-                    font = ImageFont.load_default()
-                    draw.text((250, 200), demo_text, fill='white', font=font)
-                    draw.text((200, 230), status_text, fill='gray', font=font)
-                    draw.text((280, 260), time_text, fill='green', font=font)
-                except:
-                    # Fallback without font
-                    draw.text((250, 200), demo_text, fill='white')
-                    draw.text((200, 230), status_text, fill='gray')
-                    draw.text((280, 260), time_text, fill='green')
-
-                # Convert PIL image to bytes
-                import io
-                img_byte_arr = io.BytesIO()
-                img.save(img_byte_arr, format='JPEG')
-                frame_bytes = img_byte_arr.getvalue()
-
+    """Generate video frames for streaming from live camera"""
+    while True:
+        frame = detector.get_current_frame()
+        if frame is not None:
+            # Encode frame as JPEG
+            ret, buffer = cv2.imencode(
+                '.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            if ret:
+                frame_bytes = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        else:
+            # Send a placeholder frame if no camera
+            placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv2.putText(placeholder, 'Camera Not Available', (150, 240),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            ret, buffer = cv2.imencode('.jpg', placeholder)
+            if ret:
+                frame_bytes = buffer.tobytes()
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 
-                time.sleep(0.5)  # Slower refresh for demo
-        except ImportError:
-            # Fallback to simple text response if PIL not available
-            while True:
-                simple_frame = b"Demo mode - video feed not available in serverless deployment"
-                yield (b'--frame\r\n'
-                       b'Content-Type: text/plain\r\n\r\n' + simple_frame + b'\r\n')
-                time.sleep(1.0)
-    else:
-        # Original camera feed logic
-        while True:
-            frame = detector.get_current_frame()
-            if frame is not None:
-                # Encode frame as JPEG
-                ret, buffer = cv2.imencode(
-                    '.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                if ret:
-                    frame_bytes = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-            else:
-                # Send a placeholder frame if no camera
-                placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(placeholder, 'Camera Not Available', (150, 240),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                ret, buffer = cv2.imencode('.jpg', placeholder)
-                if ret:
-                    frame_bytes = buffer.tobytes()
-                    yield (b'--frame\r\n'
-                           b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-            time.sleep(0.033)  # ~30 FPS
+        time.sleep(0.033)  # ~30 FPS
 
 
 @app.get("/video_feed")
