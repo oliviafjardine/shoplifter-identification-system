@@ -73,7 +73,6 @@ shoplifter-identifier/
 - ✅ **Real-time Face Detection**: Advanced facial recognition using Haar cascades
 - ✅ **Real-time Body Detection**: HOG-based person detection algorithm
 - ✅ **Live People Counting**: Accurate count of individuals in camera view
-- ✅ **Trained ML Model**: 100% accuracy shoplifting behavior detection
 - ✅ **Multi-method Detection**: Combined face + body detection for accuracy
 - ✅ **Real-time Processing**: <200ms detection latency at 30 FPS
 - ✅ **Professional Dashboard**: Live surveillance interface with alerts
